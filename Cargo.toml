@@ -1,13 +1,13 @@
 [package]
 name = "sentiric-sip-uac"
-version = "2.1.0"
+version = "2.1.1"
 edition = "2021"
 description = "CLI Shell for Sentiric SIP UAC - Powered by Telecom Client SDK."
 authors = ["Sentiric Team"]
 license = "AGPL-3.0"
 
 [dependencies]
-sentiric-telecom-client-sdk = { git = "https://github.com/sentiric/sentiric-telecom-client-sdk.git", tag = "v0.2.8" }
+sentiric-telecom-client-sdk = { git = "https://github.com/sentiric/sentiric-telecom-client-sdk.git", tag = "v0.2.9" }
 
 # --- Utilities ---
 tokio = { version = "1", features = ["full"] }
