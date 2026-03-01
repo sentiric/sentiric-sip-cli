@@ -8,9 +8,11 @@ use tracing::{info, warn, error, Level};
 use sentiric_telecom_client_sdk::{TelecomClient, UacEvent, CallState};
 
 fn print_usage(program_name: &str) {
-    println!("Usage: {} <TARGET_IP> [TARGET_PORT] [TO_USER] [FROM_USER]", program_name);
+    println!("Usage: {} <TARGET_IP> [TARGET_PORT] [TO_USER] [FROM_USER] [--headless]", program_name);
+    println!("Flags:");
+    println!("  --headless    : Disables audio hardware access (Use for Docker/CI)");
     println!("Example:");
-    println!("  {} 34.122.40.122 5060 9999 cli-tester", program_name);
+    println!("  {} 34.122.40.122 5060 9999 cli-tester --headless", program_name);
 }
 
 #[tokio::main]
@@ -21,33 +23,47 @@ async fn main() -> anyhow::Result<()> {
         .without_time() // CLI'da daha temiz görünüm için zamanı gizle
         .init();
 
-    // 2. Argüman Ayrıştırma (Hardcode Önleme)
+    // 2. Argüman Ayrıştırma (Flag Parsing)
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
+    
+    // --headless bayrağını kontrol et
+    let headless = args.iter().any(|arg| arg == "--headless");
+
+    // Argüman listesinden flagleri temizle (Logic için temiz liste)
+    let clean_args: Vec<String> = args.iter().filter(|a| !a.starts_with("--")).cloned().collect();
+
+    if clean_args.len() < 2 {
         error!("❌ Missing arguments.");
         print_usage(&args[0]);
         process::exit(1);
     }
 
-    let target_ip = args[1].clone();
-    let target_port: u16 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(5060);
-    let to_user = args.get(3).cloned().unwrap_or_else(|| "service".to_string());
-    let from_user = args.get(4).cloned().unwrap_or_else(|| "cli-uac".to_string());
+    let target_ip = clean_args[1].clone();
+    let target_port: u16 = clean_args.get(2).and_then(|s| s.parse().ok()).unwrap_or(5060);
+    let to_user = clean_args.get(3).cloned().unwrap_or_else(|| "service".to_string());
+    let from_user = clean_args.get(4).cloned().unwrap_or_else(|| "cli-uac".to_string());
 
     info!("==========================================");
-    info!("🚀 SENTIRIC SIP UAC v2.1 (Resilient)");
+    info!("🚀 SENTIRIC SIP UAC v2.2 (SDK v0.3.0)");
     info!("==========================================");
-    info!("🎯 Target : {}:{}", target_ip, target_port);
-    info!("📞 Call   : {} -> {}", from_user, to_user);
+    info!("🎯 Target   : {}:{}", target_ip, target_port);
+    info!("📞 Call     : {} -> {}", from_user, to_user);
+    
+    if headless {
+        info!("👻 Mode     : HEADLESS (Virtual DSP - Docker Safe)");
+    } else {
+        info!("🎤 Mode     : HARDWARE (Physical Sound Card)");
+    }
     info!("------------------------------------------");
 
     // 3. Kanal Kurulumu (SDK -> CLI)
-    // _rx warning'ini engellemek için kullanıyoruz
     let (tx, mut rx) = mpsc::channel::<UacEvent>(100);
 
-    // 4. SDK Motorunu Başlat
+    // 4. SDK Motorunu Başlat (Headless parametresi ile)
     info!("⚙️  Initializing Telecom Engine...");
-    let client = TelecomClient::new(tx);
+    
+    // [KRİTİK GÜNCELLEME]: new fonksiyonu artık headless bool alıyor
+    let client = TelecomClient::new(tx, headless);
 
     // 5. Olay Dinleyici (Background Task)
     let event_handler = tokio::spawn(async move {
@@ -69,12 +85,11 @@ async fn main() -> anyhow::Result<()> {
                     error!("❌ SDK ERROR: {}", err);
                     process::exit(1);
                 }
-                // [FIX]: Eksik kollar eklendi (Build hatasını çözen kısım)
                 UacEvent::MediaActive => {
                     info!("🎙️  MEDIA ACTIVE: 2-Way Audio Established!");
                 }
                 UacEvent::RtpStats { rx_cnt, tx_cnt } => {
-                     // İstatistikleri çok sık basmamak için debug seviyesinde tutabiliriz
+                     // İstatistikleri çok sık basmamak için debug seviyesinde tutabiliriz veya 50 pakette bir basarız
                      if rx_cnt % 50 == 0 {
                          info!("📊 RTP Stats: RX={} TX={}", rx_cnt, tx_cnt);
                      }
@@ -95,6 +110,7 @@ async fn main() -> anyhow::Result<()> {
         _ = tokio::signal::ctrl_c() => {
             warn!("🛑 User interrupted. Sending BYE...");
             let _ = client.end_call().await;
+            // Bye gönderimi için kısa bir süre tanı
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
         _ = event_handler => {}
