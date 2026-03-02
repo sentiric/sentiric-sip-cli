@@ -1,49 +1,62 @@
 // sentiric-sip-uac/src/main.rs
 
-use std::env;
+use clap::Parser;
 use std::process;
 use tokio::sync::mpsc;
 use tracing::{info, warn, error, Level};
 use sentiric_telecom_client_sdk::{TelecomClient, UacEvent, CallState};
 
-fn print_usage(program_name: &str) {
-    println!("Usage: {} <TARGET_IP> [TARGET_PORT] [TO_USER] [FROM_USER] [--headless]", program_name);
-    println!("Flags:");
-    println!("  --headless    : Disables audio hardware access (Use for Docker/CI virtual audio)");
-    println!("Example:");
-    println!("  {} 34.122.40.122 5060 9999 cli-tester --headless", program_name);
+/// Sentiric SIP UAC - Field Testing Tool
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Target IP Address (e.g., 34.122.40.122)
+    #[arg(index = 1)]
+    target_ip: String,
+
+    /// SIP Port
+    #[arg(short, long, default_value_t = 5060)]
+    port: u16,
+
+    /// Destination User (Callee)
+    #[arg(short, long, default_value = "service")]
+    to: String,
+
+    /// Source User (Caller)
+    #[arg(short, long, default_value = "cli-uac")]
+    from: String,
+
+    /// Enable Headless Mode (Virtual DSP for Docker/CI)
+    #[arg(long, default_value_t = false)]
+    headless: bool,
+
+    /// Enable Debug Logs (Show RMS levels and internal states)
+    #[arg(long, default_value_t = false)]
+    debug: bool,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // CLI Logger (Sadece Console için, Telemetri zaten SDK'nın içinde Observer'a gidiyor)
+    let args = Args::parse();
+
+    // Logger Yapılandırması
+    let log_level = if args.debug { Level::DEBUG } else { Level::INFO };
+    
     tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .without_time()
+        .with_max_level(log_level)
+        .without_time() // Temiz çıktı için
         .init();
 
-    let args: Vec<String> = env::args().collect();
-    let headless = args.iter().any(|arg| arg == "--headless");
-    let clean_args: Vec<String> = args.iter().filter(|a| !a.starts_with("--")).cloned().collect();
-
-    if clean_args.len() < 2 {
-        error!("❌ Missing arguments.");
-        print_usage(&args[0]);
-        process::exit(1);
-    }
-
-    let target_ip = clean_args[1].clone();
-    let target_port: u16 = clean_args.get(2).and_then(|s| s.parse().ok()).unwrap_or(5060);
-    let to_user = clean_args.get(3).cloned().unwrap_or_else(|| "service".to_string());
-    let from_user = clean_args.get(4).cloned().unwrap_or_else(|| "cli-uac".to_string());
-
     info!("==================================================");
-    info!("🚀 SENTIRIC SIP UAC (CLI) v2.3 - SUTS v4 Enabled");
+    info!("🚀 SENTIRIC SIP UAC (CLI) v2.4");
+    info!("   Powered by SDK v0.3.13 (Self-Healing Audio)");
     info!("==================================================");
-    info!("🎯 Target   : {}:{}", target_ip, target_port);
-    info!("📞 Call     : {} -> {}", from_user, to_user);
-    if headless {
+    info!("🎯 Target   : {}:{}", args.target_ip, args.port);
+    info!("📞 Call     : {} -> {}", args.from, args.to);
+    
+    if args.headless {
         info!("👻 Mode     : HEADLESS (Virtual DSP / Ping-Pong)");
+        info!("ℹ️  Hint     : Use --debug to see RMS signal levels.");
     } else {
         info!("🎤 Mode     : HARDWARE (Physical Sound Card)");
     }
@@ -52,16 +65,20 @@ async fn main() -> anyhow::Result<()> {
     let (tx, mut rx) = mpsc::channel::<UacEvent>(100);
 
     info!("⚙️  Initializing Telecom Engine...");
-    let client = TelecomClient::new(tx, headless);
+    let client = TelecomClient::new(tx, args.headless);
 
-    // Olay Dinleyici Loop
+    // Event Loop
     let event_handler = tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
             match event {
                 UacEvent::Log(msg) => {
-                    // Sadece [SIP_PACKET_SENT] gibi özel olmayan genel logları bas
-                    if !msg.starts_with("[SIP_PACKET") {
-                        println!("🔹 {}", msg); 
+                    // SIP paket loglarını sadece Debug modda veya özel durumlarda bas
+                    // Ancak SDK'dan gelen önemli logları her zaman göster
+                    if !msg.contains("[SIP_PACKET") {
+                        info!("🔹 {}", msg); 
+                    } else {
+                        // Paketleri debug seviyesinde tut
+                        tracing::debug!("{}", msg);
                     }
                 }
                 UacEvent::CallStateChanged(state) => {
@@ -79,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
                     info!("🎙️  MEDIA ACTIVE: 2-Way Audio Flow Established!");
                 }
                 UacEvent::RtpStats { rx_cnt, tx_cnt } => {
-                     // Konsolu çok kirletmemek için her 100 pakette bir (yaklaşık 2 saniye) ekrana bas
+                     // Her ~2 saniyede bir istatistik bas
                      if rx_cnt % 100 == 0 || tx_cnt % 100 == 0 {
                          info!("📊 RTP Stats: RX={} | TX={}", rx_cnt, tx_cnt);
                      }
@@ -89,16 +106,17 @@ async fn main() -> anyhow::Result<()> {
     });
 
     info!("🚀 Dialing...");
-    if let Err(e) = client.start_call(target_ip, target_port, to_user, from_user).await {
+    if let Err(e) = client.start_call(args.target_ip, args.port, args.to, args.from).await {
         error!("🔥 Failed to start call: {}", e);
         process::exit(1);
     }
 
-    // Ctrl+C ile güvenli kapanış (BYE Gönderimi)
+    // Graceful Shutdown (Ctrl+C)
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             warn!("🛑 User interrupted. Sending BYE...");
             let _ = client.end_call().await;
+            // BYE gitmesi için kısa bir süre bekle
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
         _ = event_handler => {}

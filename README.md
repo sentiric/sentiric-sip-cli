@@ -1,57 +1,78 @@
-# 📞 Sentiric SIP UAC (CLI)
+# 📠 Sentiric SIP UAC (CLI)
 
-Sentiric platformunu test etmek için geliştirilmiş, komut satırı tabanlı, **Stateful** bir SIP istemcisidir.
+[![Status](https://img.shields.io/badge/status-active-success.svg)]()
+[![Core](https://img.shields.io/badge/sdk-v0.3.13-orange.svg)]()
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)]()
 
-Gücünü `sentiric-telecom-client-sdk` motorundan alır.
+**Sentiric SIP UAC**, sunucu tarafı SIP/RTP uygulamalarını (SBC, B2BUA, Media Server) test etmek için tasarlanmış, Rust tabanlı, yüksek performanslı bir komut satırı aracıdır.
 
-## 🚀 Özellikler
+Mobil sürümün aksine, bu araç **Arayüzsüz (Headless)** ortamlarda çalışmak üzere optimize edilmiştir.
 
-*   **RFC 3261 Uyumu:** `INVITE`, `200 OK`, `ACK`, `BYE` akışını tam yönetir.
-*   **Auto-ACK:** Sunucudan `200 OK` geldiğinde otomatik olarak `ACK` gönderir.
-*   **RTP Latching:** SDP içindeki IP/Port bilgisini analiz eder ve medyayı doğru hedefe kilitler.
-*   **Retransmission:** UDP paket kayıplarına karşı tekrar gönderim (Timer A) yapar.
-*   **Derinlemesine Loglama:** Giden ve gelen tüm SIP paketlerini konsola basar.
+## 🌟 Temel Özellikler
 
-## 🛠️ Kurulum ve Derleme
+*   **Virtual DSP (Headless Mode):** Ses kartı olmayan sunucularda (CI/CD, Docker) çalışabilir.
+    *   **TX:** Yapay bir sinüs dalgası (440Hz) üretir ve gönderir.
+    *   **RX:** Gelen ses paketlerini decode eder ve sinyal seviyesini (RMS) ölçerek "Sesin gerçekten geldiğini" doğrular.
+*   **RFC 3261 Uyumlu:** Tam stateful SIP yığını (`INVITE`, `ACK`, `BYE`, `Auto-Reply`).
+*   **NAT Traversal:** Simetrik RTP ve Latching desteği.
+*   **Telemetri:** Gelişmiş RTP paket sayacı ve jitter analizi.
+
+## 🛠️ Kurulum
+
+### Yöntem 1: Kaynaktan Derleme (Rust Gerekir)
 
 ```bash
-# Release modunda derle (Performans için)
+# Bağımlılıkları yükle (Debian/Ubuntu)
+sudo apt install libasound2-dev protobuf-compiler
+
+# Release modunda derle
 cargo build --release
+```
+
+### Yöntem 2: Docker (Önerilen)
+
+```bash
+docker build -t sentiric-uac .
 ```
 
 ## 💻 Kullanım
 
-Aracı çalıştırmak için hedef IP adresi zorunludur. Diğer parametreler opsiyoneldir.
+### Parametreler
 
-```bash
-# Temel Kullanım (Varsayılan: Port 5060, Hedef: service, Kaynak: cli-uac)
-./target/release/sentiric-sip-uac <HEDEF_IP>
+```text
+Usage: sentiric-sip-uac [OPTIONS] <TARGET_IP>
 
-# Tam Kullanım
-./target/release/sentiric-sip-uac <HEDEF_IP> <PORT> <ARANAN_NO> <ARAYAN_NO>
+Arguments:
+  <TARGET_IP>  Target IP Address (e.g., 34.122.40.122)
+
+Options:
+  -p, --port <PORT>      SIP Port [default: 5060]
+  -t, --to <TO>          Destination User [default: service]
+  -f, --from <FROM>      Source User [default: cli-uac]
+      --headless         Enable Headless Mode (Virtual DSP)
+      --debug            Enable Debug Logs (RMS Levels)
+  -h, --help             Print help
 ```
 
-### Örnekler
+### Senaryolar
 
-**1. SBC'ye Doğrudan Arama (Echo Test):**
+#### 1. Manuel Echo Testi (Laptop/PC)
+Kendi bilgisayarınızdan, donanım ses kartını kullanarak test yapın.
 ```bash
-# 9999 numarası genellikle Echo Testidir.
-cargo run --release -- 34.122.40.122 5060 9999 my-tester
+./target/release/sentiric-sip-uac 34.122.40.122 --port 5060 --to 9999
 ```
 
-**2. B2BUA Üzerinden Arama:**
+#### 2. Otomasyon Testi (CI/CD & Docker)
+Ses kartı olmayan bir sunucuda, sesin gidip geldiğini (RMS seviyeleriyle) doğrulayın.
 ```bash
-cargo run --release -- 10.0.0.5 5060 1001 admin
+# --debug flag'i RMS loglarını açar
+./target/release/sentiric-sip-uac 34.122.40.122 --headless --debug
 ```
+*Beklenen Çıktı (Debug Mod):*
+> `DEBUG ... [Headless RX] Voice Signal Detected! Level: 1245.32`
 
-## 🔍 Beklenen Çıktı
+---
+© 2026 Sentiric Team | GNU AGPL-3.0 License
 
-Başarılı bir testte şunları görmelisiniz:
-
-1.  `📤 OUTGOING INVITE`: Oluşturulan SIP paketi.
-2.  `📥 INCOMING PACKET`: Sunucudan gelen `100 Trying` ve `180 Ringing`.
-3.  `🔔 CALL STATE: Connected`: `200 OK` alındı.
-4.  `--> AUTO-ACK Sent`: El sıkışma tamamlandı.
-5.  `⌨️ [DTMF]`: (Eğer tuşlama yaparsanız)
 
 ---
