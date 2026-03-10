@@ -99,6 +99,11 @@ async fn main() -> anyhow::Result<()> {
                         process::exit(0);
                     }
                 }
+                // [YENİ EKLENDİ]: Call ID'yi belirgin şekilde ekrana bas
+                UacEvent::CallIdGenerated(call_id) => {
+                    info!("📌 [TRACE LOCK ID]: {}", call_id);
+                    info!("👉 Panopticon'da arama çubuğuna bu ID'yi yazarak sadece bu çağrıyı izleyebilirsiniz.");
+                }                
                 UacEvent::Error(err) => {
                     error!("❌ SDK ERROR: {}", err);
                     process::exit(1);
