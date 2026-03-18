@@ -1,6 +1,7 @@
+# Dosya: Cargo.toml
 [package]
 name = "sentiric-sip-uac"
-version = "2.5.2"
+version = "2.5.3"
 edition = "2021"
 description = "Sentiric Autonomous Test Bot (Headless SIP UAC)"
 authors = ["Sentiric Team"]
@@ -12,7 +13,8 @@ sentiric-telecom-client-sdk = { git = "https://github.com/sentiric/sentiric-tele
 
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
-tracing-subscriber = "0.3"
+# [ARCH-COMPLIANCE] constraints.yaml'ın gerektirdiği observability.logging_format için json özelliği aktif edildi.
+tracing-subscriber = { version = "0.3", features = ["json"] }
 anyhow = "1.0"
 clap = { version = "4.4", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }

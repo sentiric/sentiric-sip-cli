@@ -1,5 +1,4 @@
-// sentiric-sip-uac/src/main.rs
-
+// Dosya: src/main.rs
 use clap::Parser;
 use std::process;
 use tokio::sync::mpsc;
@@ -54,8 +53,17 @@ async fn main() -> anyhow::Result<()> {
 
     let log_level = if args.debug { Level::DEBUG } else { Level::INFO };
     
-    // [MİMARİ DÜZELTME]: .without_time() KALDIRILDI. Zaman damgası analiz için zorunludur.
-    tracing_subscriber::fmt().with_max_level(log_level).init();
+    // Headless durumunu erken çözümle (argüman veya senaryodan)
+    let is_headless = args.headless || args.scenario.as_ref().map_or(false, |p| {
+        scenario::load_scenario(p).map(|sc| sc.headless).unwrap_or(false)
+    });
+
+    // [ARCH-COMPLIANCE] observability.logging_format kuralı gereği otomasyon ortamında JSON loglama zorunludur.
+    if is_headless {
+        tracing_subscriber::fmt().json().with_max_level(log_level).init();
+    } else {
+        tracing_subscriber::fmt().with_max_level(log_level).init();
+    }
 
     // 1. KULLANIM MODUNU BELİRLE VE PARAMETRELERİ AYARLA
     let (target_ip, port, to, from, headless, actions) = if let Some(scenario_path) = args.scenario {

@@ -1,0 +1,1 @@
+- [x] [ARCH-COMPLIANCE] observability.logging_format kuralı gereği JSON loglama eklendi.
