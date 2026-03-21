@@ -4,7 +4,7 @@
 [![Core](https://img.shields.io/badge/sdk-v0.3.39-orange.svg)]()
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)]()
 
-**Sentiric SIP UAC**, sunucu tarafı SIP/RTP uygulamalarını (SBC, B2BUA, Media Server) stres, dayanıklılık ve mantık testlerine tabi tutmak için tasarlanmış, otonom bir komut satırı aracıdır.
+**Sentiric SIP CLI**, sunucu tarafı SIP/RTP uygulamalarını (SBC, B2BUA, Media Server) stres, dayanıklılık ve mantık testlerine tabi tutmak için tasarlanmış, otonom bir komut satırı aracıdır.
 
 JSON tabanlı **Senaryo Motoru** sayesinde, Race Condition (Yarış Durumu), Packet Flood, Timeout ve Memory Leak gibi kritik testleri otomatize eder.
 

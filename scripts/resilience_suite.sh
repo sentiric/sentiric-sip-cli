@@ -7,7 +7,7 @@
 set -e
 
 TARGET_IP=${1}
-UAC_BIN="./target/release/sentiric-sip-uac"
+UAC_BIN="./target/release/sentiric-sip-cli" # [CRITICAL FIX] Binary ismi güncellendi
 
 if [ -z "$TARGET_IP" ]; then
     echo "🛑 HATA: Lütfen hedef sunucu IP'sini girin."

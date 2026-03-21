@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /usr/src/sentiric
 COPY . .
 
-WORKDIR /usr/src/sentiric/sentiric-sip-uac
+WORKDIR /usr/src/sentiric/sentiric-sip-cli
 
 # Build (Release)
 RUN cargo build --release
@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY --from=builder /usr/src/sentiric/sentiric-sip-uac/target/release/sentiric-sip-uac /usr/local/bin/sentiric-sip-uac
+COPY --from=builder /usr/src/sentiric/sentiric-sip-cli/target/release/sentiric-sip-cli /usr/local/bin/sentiric-sip-cli
 
 # Varsayılan olarak help basar, argümanları kullanıcıdan bekler
-ENTRYPOINT ["sentiric-sip-uac"]
+ENTRYPOINT ["sentiric-sip-cli"]

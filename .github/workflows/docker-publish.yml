@@ -1,4 +1,4 @@
-name: Build and Publish SIP UAC (Tester)
+name: Build and Publish SIP CLI (Tester)
 
 on:
   push:
@@ -16,10 +16,10 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout UAC (Ana Repo)
+      - name: Checkout CLI (Ana Repo)
         uses: actions/checkout@v4
         with:
-          path: sentiric-sip-uac
+          path: sentiric-sip-cli
 
       # Bağımlılıkları yan klasörlere çekiyoruz
       - name: Checkout SIP Core
@@ -54,7 +54,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: sentiric-sip-uac/Dockerfile
+          file: sentiric-sip-cli/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
