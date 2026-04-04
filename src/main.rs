@@ -1,10 +1,10 @@
 // Dosya: src/main.rs
 use clap::Parser;
+use sentiric_telecom_client_sdk::{CallState, TelecomClient, UacEvent};
 use std::process;
-use tokio::sync::mpsc;
 use std::time::Duration;
-use tracing::{info, warn, error, Level};
-use sentiric_telecom_client_sdk::{TelecomClient, UacEvent, CallState};
+use tokio::sync::mpsc;
+use tracing::{error, info, warn, Level};
 
 mod scenario;
 use scenario::{load_scenario, ActionDef};
@@ -51,32 +51,61 @@ async fn main() -> anyhow::Result<()> {
         process::exit(1);
     }
 
-    let log_level = if args.debug { Level::DEBUG } else { Level::INFO };
-    
+    let log_level = if args.debug {
+        Level::DEBUG
+    } else {
+        Level::INFO
+    };
+
     // Headless durumunu erken çözümle (argüman veya senaryodan)
-    let is_headless = args.headless || args.scenario.as_ref().map_or(false, |p| {
-        scenario::load_scenario(p).map(|sc| sc.headless).unwrap_or(false)
-    });
+    let is_headless = args.headless
+        || args.scenario.as_ref().map_or(false, |p| {
+            scenario::load_scenario(p)
+                .map(|sc| sc.headless)
+                .unwrap_or(false)
+        });
 
     // [ARCH-COMPLIANCE] observability.logging_format kuralı gereği otomasyon ortamında JSON loglama zorunludur.
     if is_headless {
-        tracing_subscriber::fmt().json().with_max_level(log_level).init();
+        tracing_subscriber::fmt()
+            .json()
+            .with_max_level(log_level)
+            .init();
     } else {
         tracing_subscriber::fmt().with_max_level(log_level).init();
     }
 
     // 1. KULLANIM MODUNU BELİRLE VE PARAMETRELERİ AYARLA
-    let (target_ip, port, to, from, headless, actions) = if let Some(scenario_path) = args.scenario {
+    let (target_ip, port, to, from, headless, actions) = if let Some(scenario_path) = args.scenario
+    {
         info!("📂 Senaryo dosyası yükleniyor: {}", scenario_path);
         let sc = load_scenario(&scenario_path)?;
         info!("🤖 AKTİF SENARYO: {}", sc.name);
-        
+
         // Eğer CLI'dan IP geçildiyse senaryodaki IP'yi ez (Dinamik test hedefi için)
-        let final_ip = if let Some(cli_ip) = args.target_ip { cli_ip } else { sc.target_ip };
-        
-        (final_ip, sc.port, sc.to, sc.from, sc.headless, Some(sc.actions))
+        let final_ip = if let Some(cli_ip) = args.target_ip {
+            cli_ip
+        } else {
+            sc.target_ip
+        };
+
+        (
+            final_ip,
+            sc.port,
+            sc.to,
+            sc.from,
+            sc.headless,
+            Some(sc.actions),
+        )
     } else {
-        (args.target_ip.unwrap(), args.port, args.to, args.from, args.headless, None)
+        (
+            args.target_ip.unwrap(),
+            args.port,
+            args.to,
+            args.from,
+            args.headless,
+            None,
+        )
     };
 
     info!("==================================================");
@@ -97,8 +126,11 @@ async fn main() -> anyhow::Result<()> {
         while let Some(event) = rx.recv().await {
             match event {
                 UacEvent::Log(msg) => {
-                    if !msg.contains("[SIP_PACKET") { info!("🔹 {}", msg); } 
-                    else { tracing::debug!("{}", msg); }
+                    if !msg.contains("[SIP_PACKET") {
+                        info!("🔹 {}", msg);
+                    } else {
+                        tracing::debug!("{}", msg);
+                    }
                 }
                 UacEvent::CallStateChanged(state) => {
                     info!("🔔 CALL STATE: {:?}", state);
@@ -111,7 +143,7 @@ async fn main() -> anyhow::Result<()> {
                 UacEvent::CallIdGenerated(call_id) => {
                     info!("📌 [TRACE LOCK ID]: {}", call_id);
                     info!("👉 Panopticon'da arama çubuğuna bu ID'yi yazarak sadece bu çağrıyı izleyebilirsiniz.");
-                }                
+                }
                 UacEvent::Error(err) => {
                     error!("❌ SDK ERROR: {}", err);
                     process::exit(1);
@@ -120,16 +152,19 @@ async fn main() -> anyhow::Result<()> {
                     info!("🎙️  MEDIA ACTIVE: 2-Way Audio Flow Established!");
                 }
                 UacEvent::RtpStats { rx_cnt, tx_cnt } => {
-                     if rx_cnt % 100 == 0 || tx_cnt % 100 == 0 {
-                         info!("📊 RTP Stats: RX={} | TX={}", rx_cnt, tx_cnt);
-                     }
+                    if rx_cnt % 100 == 0 || tx_cnt % 100 == 0 {
+                        info!("📊 RTP Stats: RX={} | TX={}", rx_cnt, tx_cnt);
+                    }
                 }
             }
         }
     });
 
     info!("🚀 Arama Başlatılıyor...");
-    if let Err(e) = client.start_call(target_ip.clone(), port, to.clone(), from.clone()).await {
+    if let Err(e) = client
+        .start_call(target_ip.clone(), port, to.clone(), from.clone())
+        .await
+    {
         error!("🔥 Arama başlatılamadı: {}", e);
         process::exit(1);
     }
@@ -141,11 +176,11 @@ async fn main() -> anyhow::Result<()> {
                 ActionDef::Wait { ms } => {
                     info!("⏳ Senaryo: {}ms bekleniyor...", ms);
                     tokio::time::sleep(Duration::from_millis(ms)).await;
-                },
+                }
                 ActionDef::Dtmf { key } => {
                     info!("🎹 Senaryo: '{}' tuşuna basılıyor...", key);
                     let _ = client.send_dtmf(key).await;
-                },
+                }
                 ActionDef::Hangup => {
                     info!("🛑 Senaryo: Çağrı sonlandırılıyor (Hangup)...");
                     let _ = client.end_call().await;
