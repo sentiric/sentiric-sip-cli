@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Headless durumunu erken çözümle (argüman veya senaryodan)
     let is_headless = args.headless
-        || args.scenario.as_ref().map_or(false, |p| {
+        || args.scenario.as_ref().is_some_and(|p| {
             scenario::load_scenario(p)
                 .map(|sc| sc.headless)
                 .unwrap_or(false)
@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     info!("==================================================");
-    info!("🤖 SENTIRIC AUTONOMOUS TEST BOT v2.5");
+    info!("🤖 SENTIRIC AUTONOMOUS TEST BOT v2.5.6");
     info!("==================================================");
     info!("🎯 Target   : {}:{}", target_ip, port);
     info!("📞 Call     : {} -> {}", from, to);
@@ -155,6 +155,11 @@ async fn main() -> anyhow::Result<()> {
                     if rx_cnt % 100 == 0 || tx_cnt % 100 == 0 {
                         info!("📊 RTP Stats: RX={} | TX={}", rx_cnt, tx_cnt);
                     }
+                }
+                // [YENİ EKLENDİ]: Gelen çağrıları logla
+                UacEvent::IncomingCall { from, call_id } => {
+                    info!("🔔 INCOMING CALL: {} (ID: {})", from, call_id);
+                    info!("👉 Otonom bot şu anda gelen çağrıları otomatik reddeder veya yoksayar.");
                 }
             }
         }
